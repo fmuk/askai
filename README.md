@@ -4,17 +4,22 @@ A macOS command-line interface for Apple Intelligence's on-device foundation mod
 
 ## Features
 
-✅ **Implemented (Phase 1 MVP)**
-- Single-turn prompt/response
-- Multiple input methods (--prompt, --stdin, interactive)
-- Text and JSON output formats
-- System instructions
-- Generation controls (temperature, greedy, max-tokens)
-- Verbose mode with latency tracking
-- Fully offline (on-device processing)
+✅ **Implemented**
+- **Phase 1 MVP:**
+  - Single-turn prompt/response
+  - Multiple input methods (--prompt, --stdin, interactive)
+  - Text and JSON output formats
+  - System instructions
+  - Generation controls (temperature, greedy, max-tokens)
+  - Verbose mode with latency tracking
+  - Fully offline (on-device processing)
+
+- **Phase 2: Streaming:**
+  - Real-time token streaming (default for text output)
+  - See responses appear as they're generated
+  - Optional buffered mode with `--no-stream`
 
 🚧 **Planned**
-- Streaming output (Phase 2)
 - REPL mode with conversation history (Phase 3)
 - Session persistence (Phase 3)
 - Context window management (Phase 3)
@@ -58,13 +63,16 @@ cat document.txt | .build/release/ai --stdin
 ### Output Formats
 
 ```bash
-# Text output (default)
-.build/release/ai --prompt "Hello"
+# Text output with streaming (default - tokens appear in real-time)
+.build/release/ai --prompt "Write a story"
 
-# JSON output
+# Disable streaming (buffer complete response)
+.build/release/ai --prompt "Write a story" --no-stream
+
+# JSON output (automatically disables streaming)
 .build/release/ai --prompt "Hello" --format json
 
-# Verbose mode (shows latency and token estimates)
+# Verbose mode (shows latency)
 .build/release/ai --prompt "Hello" --verbose
 ```
 
@@ -90,6 +98,7 @@ OPTIONS:
   -p, --prompt <prompt>       Prompt text
   --stdin                     Read prompt from stdin
   --format <format>           Output format (text|json) (default: text)
+  --no-stream                 Disable streaming output (buffer complete response)
   -q, --quiet                 Only print model output
   -v, --verbose               Show detailed information
   --max-tokens <max-tokens>   Maximum response tokens

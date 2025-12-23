@@ -6,6 +6,7 @@ import FoundationModels
 @available(macOS 26.0, *)
 protocol LanguageModeling {
     func respond(to prompt: String, options: GenerationOptions?) async throws -> Response
+    func streamResponse(to prompt: String, options: GenerationOptions?) -> AsyncThrowingStream<String, Error>
 }
 
 struct Response {
@@ -36,7 +37,27 @@ actor AppleModelClient: LanguageModeling {
         }
     }
 
-    private func categorizeError(_ error: LanguageModelSession.GenerationError) -> Error {
+    nonisolated func streamResponse(to prompt: String, options: GenerationOptions? = nil) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let opts = options ?? GenerationOptions()
+                    // Access session in isolated context
+                    let stream = session.streamResponse(to: prompt, options: opts)
+                    for try await partial in stream {
+                        continuation.yield(partial.content)
+                    }
+                    continuation.finish()
+                } catch let error as LanguageModelSession.GenerationError {
+                    continuation.finish(throwing: categorizeError(error))
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    private nonisolated func categorizeError(_ error: LanguageModelSession.GenerationError) -> Error {
         switch error {
         case .exceededContextWindowSize:
             return CLIError.generationFailed(
@@ -70,5 +91,16 @@ struct MockLanguageModel: LanguageModeling {
             throw error
         }
         return Response(content: mockResponse, estimatedTokens: nil)
+    }
+
+    func streamResponse(to prompt: String, options: GenerationOptions?) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            if let error = shouldThrow {
+                continuation.finish(throwing: error)
+            } else {
+                continuation.yield(mockResponse)
+                continuation.finish()
+            }
+        }
     }
 }

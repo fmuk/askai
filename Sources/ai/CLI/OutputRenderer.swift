@@ -10,6 +10,33 @@ struct OutputRenderer {
     let quiet: Bool
     let verbose: Bool
 
+    func printStreaming(_ stream: AsyncThrowingStream<String, Error>) async throws -> (content: String, latency: Int) {
+        let startTime = Date()
+        var previousContent = ""
+        var fullContent = ""
+
+        for try await cumulativeContent in stream {
+            // Foundation Models sends cumulative content, so print only the delta
+            if cumulativeContent.count > previousContent.count {
+                let newContent = String(cumulativeContent.dropFirst(previousContent.count))
+                print(newContent, terminator: "")
+                fflush(stdout)
+            }
+            previousContent = cumulativeContent
+            fullContent = cumulativeContent
+        }
+        print() // Final newline
+
+        let latencyMs = Int(Date().timeIntervalSince(startTime) * 1000)
+
+        if verbose {
+            print("\n---")
+            print("Latency: \(latencyMs)ms")
+        }
+
+        return (fullContent, latencyMs)
+    }
+
     func printResponse(_ response: Response, prompt: String, systemInstructions: String?, latencyMs: Int) {
         switch format {
         case .text:

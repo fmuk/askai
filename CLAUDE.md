@@ -10,16 +10,20 @@ The tool provides command-line access to the ~3B parameter on-device model that 
 
 ## Implementation Status
 
-**Current state:** ✅ Phase 1 MVP COMPLETE and tested
-- Basic single-turn prompts working
-- All input modes functional (--prompt, --stdin, interactive)
-- Text and JSON output formats working
-- System instructions working
-- Verbose mode with latency tracking
-- Successfully tested with real Apple Intelligence on macOS 26.2
+**Current state:** ✅ Phase 2 COMPLETE - Streaming Output
+- ✅ Phase 1: MVP complete
+  - Basic single-turn prompts working
+  - All input modes functional (--prompt, --stdin, interactive)
+  - Text and JSON output formats working
+  - System instructions working
+  - Verbose mode with latency tracking
+- ✅ Phase 2: Streaming complete
+  - Real-time token streaming (default for text output)
+  - Proper handling of cumulative partial responses
+  - Optional buffered mode with `--no-stream`
+  - Successfully tested with real Apple Intelligence on macOS 26.2
 
 **Next steps:**
-- Phase 2: Streaming output
 - Phase 3: REPL mode with context management
 - Phase 4: Session persistence and polish
 

@@ -29,6 +29,9 @@ struct AI: AsyncParsableCommand {
     @Option(help: "Output format (text|json)")
     var format: String = "text"
 
+    @Flag(help: "Disable streaming output (buffer complete response)")
+    var noStream: Bool = false
+
     @Flag(name: .shortAndLong, help: "Only print model output")
     var quiet: Bool = false
 
@@ -81,6 +84,7 @@ struct AI: AsyncParsableCommand {
             prompt: prompt,
             useStdin: stdin,
             format: format == "json" ? .json : .text,
+            noStream: noStream,
             quiet: quiet,
             verbose: verbose,
             maxTokens: maxTokens,
@@ -132,6 +136,7 @@ struct CLIRunner {
     let prompt: String?
     let useStdin: Bool
     let format: OutputFormat
+    let noStream: Bool
     let quiet: Bool
     let verbose: Bool
     let maxTokens: Int?
@@ -178,17 +183,24 @@ struct CLIRunner {
         )
 
         // 6. Generate response
-        let startTime = Date()
-
         do {
-            let response = try await client.respond(to: input, options: options)
-            let latency = Int(Date().timeIntervalSince(startTime) * 1000)
-            renderer.printResponse(
-                response,
-                prompt: input,
-                systemInstructions: system,
-                latencyMs: latency
-            )
+            // Use streaming by default for text format (unless --no-stream or --format json)
+            let shouldStream = format == .text && !noStream
+
+            if shouldStream {
+                let stream = client.streamResponse(to: input, options: options)
+                _ = try await renderer.printStreaming(stream)
+            } else {
+                let startTime = Date()
+                let response = try await client.respond(to: input, options: options)
+                let latency = Int(Date().timeIntervalSince(startTime) * 1000)
+                renderer.printResponse(
+                    response,
+                    prompt: input,
+                    systemInstructions: system,
+                    latencyMs: latency
+                )
+            }
         } catch let error as CLIError {
             renderer.printError(error.localizedDescription)
             throw error
