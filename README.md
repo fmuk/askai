@@ -26,6 +26,12 @@ A macOS command-line interface for Apple Intelligence's on-device foundation mod
   - Session persistence (save/load conversations in JSONL format)
   - Configurable history budget
 
+- **Phase 4: Structured Output:**
+  - Extract structured data as JSON using predefined schemas
+  - Built-in schemas: contact info, tasks, code analysis, message classification, key-value pairs, lists
+  - Automatic JSON parsing with markdown code block handling
+  - Schema validation and error reporting
+
 ## Requirements
 
 - macOS 26.0 (Tahoe) or later
@@ -109,6 +115,41 @@ The REPL mode maintains conversation history and automatically manages the 4,096
 .build/release/ai --max-tokens 50 --prompt "Explain AI"
 ```
 
+### Structured Output
+
+```bash
+# Extract contact information
+.build/release/ai --schema contact --format json --prompt "Name: John Doe, Email: john@example.com, Phone: 555-1234"
+
+# Extract a list of items
+.build/release/ai --schema list --format json --prompt "List the programming languages: Python, JavaScript, Swift"
+
+# Extract task information
+.build/release/ai --schema task --format json --prompt "Create a task to update the documentation, high priority, 2 hours"
+
+# Extract multiple tasks
+.build/release/ai --schema task-list --format json --prompt "Plan a birthday party"
+
+# Extract key-value pairs
+.build/release/ai --schema key-value --format json --prompt "Parse config: debug=true, port=8080, host=localhost"
+
+# Message classification
+.build/release/ai --schema message --format json --prompt "Classify this email: URGENT - Server down, need immediate attention"
+
+# Code analysis
+.build/release/ai --schema code-analysis --format json --stdin < mycode.swift
+```
+
+Available schemas:
+- `contact` - Extract contact info (name, email, phone, address)
+- `task` - Single task with title, description, priority
+- `task-list` - Multiple tasks
+- `code-issue` - Single code issue with severity and suggestion
+- `code-analysis` - Multiple code issues with summary
+- `message` - Email/message classification (category, sentiment, priority)
+- `key-value` - Extract key-value pairs
+- `list` - Simple list of strings
+
 ## Command-Line Options
 
 ```
@@ -124,6 +165,7 @@ OPTIONS:
   --max-tokens <max-tokens>        Maximum response tokens
   --temperature <temperature>      Temperature (0.0-2.0)
   --greedy                         Use greedy sampling (deterministic)
+  --schema <schema>                Schema type for structured output (contact, task, task-list, code-issue, code-analysis, message, key-value, list)
   --system <system>                System instruction
   --repl                           Interactive conversation mode
   --save-session <save-session>    Save session transcript to file (JSONL)
@@ -148,15 +190,16 @@ ai/
 │   ├── CLI/
 │   │   ├── InputReader.swift   # stdin/TTY input handling
 │   │   └── OutputRenderer.swift # Text and JSON output
-│   ├── Core/                   # (Phase 3)
-│   │   ├── TokenEstimator.swift
-│   │   ├── ContextManager.swift
-│   │   ├── REPL.swift
-│   │   └── Session.swift
+│   ├── Core/
+│   │   ├── TokenEstimator.swift   # Token counting heuristic
+│   │   ├── ContextManager.swift   # Context window management
+│   │   ├── REPL.swift             # Interactive conversation mode
+│   │   ├── Session.swift          # Transcript persistence
+│   │   └── Schemas.swift          # Structured output schema definitions (Phase 4)
 │   └── Infra/
 │       ├── Errors.swift        # Error types and exit codes
 │       ├── AvailabilityGuard.swift # Apple Intelligence availability checking
-│       └── ModelClient.swift   # FoundationModels wrapper
+│       └── ModelClient.swift   # FoundationModels wrapper with structured output support
 └── Tests/aiTests/
 ```
 
@@ -172,8 +215,14 @@ cat myfile.swift | .build/release/ai --stdin --system "Review this Swift code fo
 # Generate content
 .build/release/ai --prompt "Write 5 creative project names for a weather app" --temperature 1.8
 
-# Extract information
+# Extract information (unstructured)
 .build/release/ai --prompt "Extract email addresses from this text: Contact us at hello@example.com or support@test.org" --format json
+
+# Extract structured contact information
+.build/release/ai --schema contact --format json --prompt "Parse: John Doe, john@company.com, (555) 123-4567"
+
+# Extract list of items
+.build/release/ai --schema list --format json --prompt "Find all cities mentioned: I've lived in New York, San Francisco, and Tokyo"
 
 # Interactive coding session
 .build/release/ai --repl --system "You are an expert Swift developer" --save-session coding-session.jsonl

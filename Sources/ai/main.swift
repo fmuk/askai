@@ -48,6 +48,10 @@ struct AI: AsyncParsableCommand {
     @Flag(help: "Use greedy sampling (deterministic)")
     var greedy: Bool = false
 
+    // MARK: - Structured Output Options
+    @Option(help: "Schema type for structured output (contact, task, task-list, code-issue, code-analysis, message, key-value, list)")
+    var schema: String?
+
     // MARK: - Session Options
     @Option(help: "System instruction")
     var system: String?
@@ -93,6 +97,19 @@ struct AI: AsyncParsableCommand {
         if loadSession != nil && !repl {
             throw ValidationError("--load-session only works in REPL mode")
         }
+
+        // Validate schema if provided
+        if let schemaStr = schema {
+            let validSchemas = SchemaType.allCases.map { $0.rawValue }
+            if !validSchemas.contains(schemaStr) {
+                throw ValidationError("Invalid schema type '\(schemaStr)'. Valid options: \(validSchemas.joined(separator: ", "))")
+            }
+        }
+
+        // Schema requires format to be json or unspecified (will default to json)
+        if schema != nil && format == "text" {
+            throw ValidationError("Structured output (--schema) requires --format json or no format specified")
+        }
     }
 
     // MARK: - Run
@@ -107,6 +124,7 @@ struct AI: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature,
             greedy: greedy,
+            schema: schema,
             system: system,
             repl: repl,
             saveSession: saveSession,
@@ -162,6 +180,7 @@ struct CLIRunner {
     let maxTokens: Int?
     let temperature: Double?
     let greedy: Bool
+    let schema: String?
     let system: String?
     let repl: Bool
     let saveSession: String?
@@ -212,22 +231,47 @@ struct CLIRunner {
 
         // 7. Generate response
         do {
-            // Use streaming by default for text format (unless --no-stream or --format json)
-            let shouldStream = format == .text && !noStream
+            // Handle structured output if schema is specified
+            if let schemaStr = schema {
+                guard let schemaType = SchemaType(rawValue: schemaStr) else {
+                    throw CLIError.invalidInput("Invalid schema type: \(schemaStr)")
+                }
 
-            if shouldStream {
-                let stream = client.streamResponse(to: input, options: options)
-                _ = try await renderer.printStreaming(stream)
-            } else {
                 let startTime = Date()
-                let response = try await client.respond(to: input, options: options)
+                let jsonOutput = try await generateStructuredResponse(
+                    client: client,
+                    input: input,
+                    schemaType: schemaType,
+                    options: options
+                )
                 let latency = Int(Date().timeIntervalSince(startTime) * 1000)
-                renderer.printResponse(
-                    response,
+
+                renderer.printStructuredResponse(
+                    jsonOutput,
                     prompt: input,
+                    schemaType: schemaType,
                     systemInstructions: system,
                     latencyMs: latency
                 )
+            } else {
+                // Regular text output
+                // Use streaming by default for text format (unless --no-stream or --format json)
+                let shouldStream = format == .text && !noStream
+
+                if shouldStream {
+                    let stream = client.streamResponse(to: input, options: options)
+                    _ = try await renderer.printStreaming(stream)
+                } else {
+                    let startTime = Date()
+                    let response = try await client.respond(to: input, options: options)
+                    let latency = Int(Date().timeIntervalSince(startTime) * 1000)
+                    renderer.printResponse(
+                        response,
+                        prompt: input,
+                        systemInstructions: system,
+                        latencyMs: latency
+                    )
+                }
             }
         } catch let error as CLIError {
             renderer.printError(error.localizedDescription)
@@ -238,6 +282,50 @@ struct CLIRunner {
                 error.localizedDescription,
                 exitCode: ExitCode.generationFailed
             )
+        }
+    }
+
+    private func generateStructuredResponse(
+        client: AppleModelClient,
+        input: String,
+        schemaType: SchemaType,
+        options: GenerationOptions?
+    ) async throws -> String {
+        // Build prompt with schema example
+        let enhancedPrompt = """
+        \(input)
+
+        You MUST respond with ONLY valid JSON following this exact schema:
+        \(schemaType.exampleJSON)
+
+        Use these exact field names and types. Do not include any explanatory text.
+        """
+
+        switch schemaType {
+        case .contact:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: ContactInfo.self, options: options)
+            return response.rawJSON
+        case .task:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: TaskItem.self, options: options)
+            return response.rawJSON
+        case .taskList:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: TaskList.self, options: options)
+            return response.rawJSON
+        case .codeIssue:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: CodeIssue.self, options: options)
+            return response.rawJSON
+        case .codeAnalysis:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: CodeAnalysis.self, options: options)
+            return response.rawJSON
+        case .messageClassification:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: MessageClassification.self, options: options)
+            return response.rawJSON
+        case .keyValuePairs:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: KeyValuePairs.self, options: options)
+            return response.rawJSON
+        case .stringList:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: StringList.self, options: options)
+            return response.rawJSON
         }
     }
 

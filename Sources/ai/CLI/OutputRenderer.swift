@@ -69,6 +69,24 @@ struct OutputRenderer {
         }
     }
 
+    func printStructuredResponse(
+        _ jsonOutput: String,
+        prompt: String,
+        schemaType: SchemaType,
+        systemInstructions: String?,
+        latencyMs: Int
+    ) {
+        // Always output the structured JSON
+        print(jsonOutput)
+
+        // Optionally show metadata in verbose mode
+        if verbose {
+            print("\n---")
+            print("Schema: \(schemaType.rawValue)")
+            print("Latency: \(latencyMs)ms")
+        }
+    }
+
     func printError(_ message: String) {
         if !quiet {
             fputs("Error: \(message)\n", stderr)
