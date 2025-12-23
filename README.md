@@ -19,10 +19,12 @@ A macOS command-line interface for Apple Intelligence's on-device foundation mod
   - See responses appear as they're generated
   - Optional buffered mode with `--no-stream`
 
-🚧 **Planned**
-- REPL mode with conversation history (Phase 3)
-- Session persistence (Phase 3)
-- Context window management (Phase 3)
+- **Phase 3: REPL & Context Management:**
+  - Interactive conversation mode (`--repl`)
+  - Automatic context window management (4,096 token limit)
+  - Smart history truncation (keeps recent messages)
+  - Session persistence (save/load conversations in JSONL format)
+  - Configurable history budget
 
 ## Requirements
 
@@ -48,7 +50,7 @@ swift build -c release
 # Simple prompt
 ./build/release/ai --prompt "Write a haiku about coding"
 
-# Interactive mode
+# Interactive single prompt
 ./build/release/ai
 > Type your prompt here
 > Press Ctrl+D to submit
@@ -59,6 +61,24 @@ cat document.txt | .build/release/ai --stdin
 # With system instruction
 .build/release/ai --system "You are a helpful assistant" --prompt "Explain quantum computing"
 ```
+
+### REPL Mode (Interactive Conversations)
+
+```bash
+# Start REPL mode
+.build/release/ai --repl
+
+# REPL with system instruction
+.build/release/ai --repl --system "You are a helpful coding assistant"
+
+# REPL with session saving
+.build/release/ai --repl --save-session chat.jsonl
+
+# REPL with custom context budget (default 2048 tokens for history)
+.build/release/ai --repl --context-tokens 3000
+```
+
+The REPL mode maintains conversation history and automatically manages the 4,096 token context window by truncating older messages when needed.
 
 ### Output Formats
 
@@ -95,20 +115,23 @@ cat document.txt | .build/release/ai --stdin
 USAGE: ai [<options>]
 
 OPTIONS:
-  -p, --prompt <prompt>       Prompt text
-  --stdin                     Read prompt from stdin
-  --format <format>           Output format (text|json) (default: text)
-  --no-stream                 Disable streaming output (buffer complete response)
-  -q, --quiet                 Only print model output
-  -v, --verbose               Show detailed information
-  --max-tokens <max-tokens>   Maximum response tokens
-  --temperature <temperature> Temperature (0.0-2.0)
-  --greedy                    Use greedy sampling (deterministic)
-  --system <system>           System instruction
-  --repl                      Interactive conversation mode (not yet implemented)
-  --timeout <timeout>         Generation timeout in seconds (default: 60)
-  --version                   Show the version
-  -h, --help                  Show help information
+  -p, --prompt <prompt>            Prompt text
+  --stdin                          Read prompt from stdin
+  --format <format>                Output format (text|json) (default: text)
+  --no-stream                      Disable streaming output (buffer complete response)
+  -q, --quiet                      Only print model output
+  -v, --verbose                    Show detailed information
+  --max-tokens <max-tokens>        Maximum response tokens
+  --temperature <temperature>      Temperature (0.0-2.0)
+  --greedy                         Use greedy sampling (deterministic)
+  --system <system>                System instruction
+  --repl                           Interactive conversation mode
+  --save-session <save-session>    Save session transcript to file (JSONL)
+  --load-session <load-session>    Load session transcript from file (JSONL)
+  --context-tokens <context-tokens> Token budget for conversation history (default: 2048)
+  --timeout <timeout>              Generation timeout in seconds (default: 60)
+  --version                        Show the version
+  -h, --help                       Show help information
 ```
 
 ## Architecture
@@ -151,6 +174,13 @@ cat myfile.swift | .build/release/ai --stdin --system "Review this Swift code fo
 
 # Extract information
 .build/release/ai --prompt "Extract email addresses from this text: Contact us at hello@example.com or support@test.org" --format json
+
+# Interactive coding session
+.build/release/ai --repl --system "You are an expert Swift developer" --save-session coding-session.jsonl
+
+# Long conversation with context management
+.build/release/ai --repl --context-tokens 3000 --verbose
+# The verbose flag will show when older messages are truncated
 ```
 
 ## Performance

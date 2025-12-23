@@ -55,6 +55,15 @@ struct AI: AsyncParsableCommand {
     @Flag(help: "Interactive conversation mode")
     var repl: Bool = false
 
+    @Option(help: "Save session transcript to file (JSONL)")
+    var saveSession: String?
+
+    @Option(help: "Load session transcript from file (JSONL)")
+    var loadSession: String?
+
+    @Option(help: "Token budget for conversation history (default: 2048)")
+    var contextTokens: Int = 2048
+
     // MARK: - Operational Options
     @Option(help: "Generation timeout in seconds")
     var timeout: Int = 60
@@ -76,6 +85,14 @@ struct AI: AsyncParsableCommand {
         if format == "json" && repl {
             throw ValidationError("JSON format not supported in REPL mode")
         }
+
+        if repl && (prompt != nil || stdin) {
+            throw ValidationError("Cannot use --prompt or --stdin in REPL mode")
+        }
+
+        if loadSession != nil && !repl {
+            throw ValidationError("--load-session only works in REPL mode")
+        }
     }
 
     // MARK: - Run
@@ -92,6 +109,9 @@ struct AI: AsyncParsableCommand {
             greedy: greedy,
             system: system,
             repl: repl,
+            saveSession: saveSession,
+            loadSession: loadSession,
+            contextTokens: contextTokens,
             timeout: timeout
         )
 
@@ -144,13 +164,21 @@ struct CLIRunner {
     let greedy: Bool
     let system: String?
     let repl: Bool
+    let saveSession: String?
+    let loadSession: String?
+    let contextTokens: Int
     let timeout: Int
 
     func run() async throws {
         // 1. Check availability
         try AvailabilityGuard.check()
 
-        // 2. Resolve input
+        // 2. Handle REPL mode separately
+        if repl {
+            return try await runREPL()
+        }
+
+        // 3. Resolve input for single-turn mode
         let input = try InputReader.resolve(
             prompt: prompt,
             useStdin: useStdin
@@ -160,10 +188,10 @@ struct CLIRunner {
             throw CLIError.invalidInput("Empty prompt")
         }
 
-        // 3. Create model client
+        // 4. Create model client
         let client = AppleModelClient(systemInstructions: system)
 
-        // 4. Configure generation options
+        // 5. Configure generation options
         var options = GenerationOptions()
         if let temp = temperature {
             options.temperature = temp
@@ -175,14 +203,14 @@ struct CLIRunner {
             options.maximumResponseTokens = max
         }
 
-        // 5. Create renderer
+        // 6. Create renderer
         let renderer = OutputRenderer(
             format: format,
             quiet: quiet,
             verbose: verbose
         )
 
-        // 6. Generate response
+        // 7. Generate response
         do {
             // Use streaming by default for text format (unless --no-stream or --format json)
             let shouldStream = format == .text && !noStream
@@ -211,6 +239,38 @@ struct CLIRunner {
                 exitCode: ExitCode.generationFailed
             )
         }
+    }
+
+    func runREPL() async throws {
+        // Configure generation options
+        var options = GenerationOptions()
+        if let temp = temperature {
+            options.temperature = temp
+        }
+        if greedy {
+            options.sampling = .greedy
+        }
+        if let max = maxTokens {
+            options.maximumResponseTokens = max
+        }
+
+        // Create context manager
+        let contextManager = ContextManager(historyBudget: contextTokens)
+
+        // Create model client
+        let client = AppleModelClient(systemInstructions: system)
+
+        // Create and run REPL
+        let replInstance = REPL(
+            client: client,
+            system: system,
+            contextManager: contextManager,
+            verbose: verbose,
+            saveSessionPath: saveSession,
+            options: options
+        )
+
+        try await replInstance.run()
     }
 }
 

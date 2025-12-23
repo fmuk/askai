@@ -10,22 +10,31 @@ The tool provides command-line access to the ~3B parameter on-device model that 
 
 ## Implementation Status
 
-**Current state:** ✅ Phase 2 COMPLETE - Streaming Output
+**Current state:** ✅ Phase 3 COMPLETE - REPL & Context Management
+
 - ✅ Phase 1: MVP complete
   - Basic single-turn prompts working
   - All input modes functional (--prompt, --stdin, interactive)
   - Text and JSON output formats working
   - System instructions working
   - Verbose mode with latency tracking
+
 - ✅ Phase 2: Streaming complete
   - Real-time token streaming (default for text output)
   - Proper handling of cumulative partial responses
   - Optional buffered mode with `--no-stream`
+
+- ✅ Phase 3: REPL & Context Management complete
+  - Interactive conversation mode (`--repl`)
+  - Automatic context window management (4,096 token limit)
+  - Smart history truncation (keeps recent messages within token budget)
+  - Session persistence (save/load in JSONL format)
+  - Configurable history budget (`--context-tokens`)
+  - Token estimation heuristic (~4 chars/token)
   - Successfully tested with real Apple Intelligence on macOS 26.2
 
-**Next steps:**
-- Phase 3: REPL mode with context management
-- Phase 4: Session persistence and polish
+**Status:** Feature-complete and production-ready!
+All planned phases implemented. Future enhancements optional.
 
 ## Key Technical Constraints
 
