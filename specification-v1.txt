@@ -1,0 +1,266 @@
+Below is a concrete **spec + high-level design** for a macOS CLI that “chats” by sending a prompt to **Apple Intelligence’s on-device foundation model** via Apple’s **Foundation Models framework** (Swift). Apple explicitly positions this framework as enabling experiences that “work without internet connectivity.” ([Apple Developer][1])
+
+---
+
+## 1) Product definition
+
+**Name (working):** `ai` (or `apple-ai`, `aiprompt`)
+
+**Goal:** Accept a prompt (CLI arg / stdin / interactive), run it through Apple Intelligence’s **on-device** model, print the response to stdout.
+
+**Non-goals:**
+
+* Not a Siri automation tool.
+* Not a “cloud fallback” tool (no Private Cloud Compute).
+* Not a full chat history UI; it’s a CLI “single-turn” tool with optional session loop.
+
+Apple Intelligence *can* use **Private Cloud Compute** for some requests in general, but this tool is designed to remain strictly on-device/offline. ([Apple Support][2])
+
+---
+
+## 2) Requirements
+
+### 2.1 Platform
+
+* macOS version that includes **Foundation Models framework** (Apple Intelligence era; Apple’s naming indicates it’s available across Apple platforms). ([Apple Developer][1])
+* Apple Silicon recommended/expected (practically required for on-device generation performance).
+* Apple Intelligence enabled and required language/model assets downloaded (OS-managed).
+
+### 2.2 Offline-only guarantee
+
+* Provide `--offline` flag that:
+
+  * Prevents any network use by the process (best-effort enforcement).
+  * Fails fast if connectivity is required (should not be, if you stick to the on-device Foundation Models API).
+
+Rationale: Apple describes a split where some complex requests can involve Private Cloud Compute generally. ([Apple Support][2])
+
+---
+
+## 3) CLI interface specification
+
+### 3.1 Usage
+
+```bash
+ai "Summarise this text: ..."
+
+ai --prompt "Write 5 bullet points about X"
+
+echo "Explain this code:" | ai --stdin
+
+ai            # interactive prompt
+ai --repl     # continuous loop (multi-turn UX)
+```
+
+### 3.2 Flags
+
+* Input
+
+  * `--prompt, -p <text>`: prompt as argument
+  * `--stdin`: read prompt from stdin (until EOF)
+  * (default) interactive prompt if neither `--prompt` nor `--stdin` is provided
+
+* Output
+
+  * `--format text|json`: default `text`
+  * `--no-wrap`: disable line wrapping
+  * `--quiet`: only print model output (no banners/errors unless fatal)
+
+* Generation controls (exposed conservatively)
+
+  * `--max-tokens <n>` (default: framework default)
+  * `--temperature <0..2>` (if supported; otherwise ignore with warning)
+  * `--seed <n>` (optional; if supported)
+
+* Safety / policy
+
+  * `--offline` (default: **on**; allow `--online` only if you later add optional cloud features—recommended: don’t)
+  * `--timeout <seconds>`: total generation deadline
+
+* UX
+
+  * `--repl`: interactive loop, keeps a local conversation transcript (in memory only unless `--save-session`)
+  * `--save-session <path>`: save transcript locally (JSONL)
+  * `--system <text>`: optional system instruction prepended (local only)
+
+### 3.3 Exit codes
+
+* `0` success
+* `2` CLI usage error
+* `10` Apple Intelligence unavailable / not enabled
+* `11` model assets missing / not downloaded
+* `12` offline enforcement failure (network detected)
+* `20` generation failed (framework error)
+* `21` timeout
+
+---
+
+## 4) Behavioral specification
+
+### 4.1 Input resolution order
+
+1. `--prompt` if present
+2. `--stdin` if present
+3. Interactive prompt:
+
+   * Display `Prompt> `
+   * Read multiline until EOF or a line containing only `.` (optional convenience)
+
+### 4.2 Prompt construction
+
+* Build request as:
+
+  * optional system instruction (from `--system`)
+  * user prompt
+  * in `--repl` mode, include last *K* turns from transcript (configurable; default K=8)
+* Provide a hard cap on total input size and trim oldest turns first.
+
+### 4.3 Output formatting
+
+* `text`: print model response as-is.
+* `json`: emit:
+
+```json
+{
+  "model": "apple.foundation.ondevice",
+  "offline": true,
+  "prompt": "...",
+  "response": "...",
+  "usage": { "input_tokens": null, "output_tokens": null },
+  "latency_ms": 1234,
+  "warnings": []
+}
+```
+
+(Token counts may be unavailable; keep fields nullable.)
+
+---
+
+## 5) High-level architecture
+
+### 5.1 Components
+
+1. **CLI Frontend**
+
+   * Argument parsing (Swift ArgumentParser)
+   * stdin/interactive reader
+   * output renderer
+   * exit-code mapping
+
+2. **Offline Guard**
+
+   * If `--offline`:
+
+     * (Best effort) check active network interfaces / route availability
+     * optionally install a Network.framework “deny all” policy within process constraints (or simpler: detect and refuse if network is up; this is still useful as a guarantee-of-intent)
+   * Log warning if enforcement can’t be made airtight in user-space.
+
+3. **Prompt Engine**
+
+   * Constructs final prompt from system + transcript + input
+   * Truncation strategy
+   * Optional redaction rules (if you want: `--redact-email`, etc.)
+
+4. **Apple Model Client**
+
+   * Single responsibility: call **Foundation Models framework** with the final prompt.
+   * Abstraction: `LanguageModeling` protocol so you can test with a stub.
+   * Uses the on-device model API (Apple calls out guided generation + tool calling in the framework). ([Apple Developer][1])
+
+5. **Session Store (optional)**
+
+   * In-memory transcript
+   * Optional JSONL persistence to user-specified path
+
+### 5.2 Data flow (single-turn)
+
+`CLI args/stdin` → `OfflineGuard` → `PromptEngine` → `AppleModelClient.generate()` → `Renderer` → stdout
+
+### 5.3 Data flow (REPL)
+
+Loop:
+
+* read user message
+* append to transcript
+* generate response
+* append response
+* display
+
+---
+
+## 6) Implementation design (Swift)
+
+### 6.1 Packaging
+
+* Swift Package Manager executable: `Sources/ai/main.swift`
+* Modules (folders):
+
+  * `CLI/`
+  * `Core/PromptEngine.swift`
+  * `Core/Session.swift`
+  * `Core/Renderer.swift`
+  * `Infra/OfflineGuard.swift`
+  * `Infra/AppleModelClient.swift`
+
+### 6.2 Concurrency
+
+* Use `async/await` for generation.
+* Implement timeout by racing `Task.sleep` vs generation task; cancel on timeout.
+
+### 6.3 Pseudocode sketch (high level)
+
+```swift
+let input = try InputResolver.resolve(args, stdin)
+try OfflineGuard.enforceIfNeeded(args.offline)
+let request = PromptEngine.build(system: args.system, input: input, session: session)
+let response = try await AppleModelClient.generate(request, params: args.generationParams)
+Renderer.print(response, format: args.format)
+```
+
+---
+
+## 7) Operational concerns
+
+### 7.1 Availability checks (fail fast)
+
+* “Is Apple Intelligence available?” (framework availability + runtime checks)
+* “Are model assets present?” (if the API surfaces this; otherwise detect via first-call error)
+
+### 7.2 Privacy stance
+
+* Default: do not write prompts/responses to disk.
+* `--save-session` is explicit opt-in.
+* `--offline` default true.
+
+Apple’s public positioning emphasizes on-device processing and, where used, Private Cloud Compute privacy protections; this design avoids PCC entirely by staying on-device. ([Apple Developer][1])
+
+---
+
+## 8) Testing strategy
+
+* Unit tests for:
+
+  * CLI parsing
+  * input resolution precedence
+  * truncation behavior
+  * JSON output schema
+* Integration test:
+
+  * Run with stub `LanguageModeling` to avoid depending on the OS model in CI.
+* Manual validation:
+
+  * On a compatible macOS system with Apple Intelligence enabled.
+
+---
+
+## 9) Notes on feasibility and precedent
+
+A third-party CLI (“afm”) exists that claims command-line access to Apple’s on-device foundation model on newer macOS, which supports the idea that the approach is workable in principle. ([GitHub][3])
+
+---
+
+If you want this to be *actually robust* as “offline-only,” the hard part isn’t generation (Foundation Models is the clean path); it’s **provably preventing any accidental network path**. The spec above treats `--offline` as a strict contract and designs the tool so it should never need network in the first place, aligning with Apple’s “works without internet connectivity” premise for the framework. ([Apple Developer][1])
+
+[1]: https://developer.apple.com/apple-intelligence/ "Apple Intelligence - Apple Developer"
+[2]: https://support.apple.com/guide/iphone/apple-intelligence-and-privacy-iphe3f499e0e/ios?utm_source=chatgpt.com "Apple Intelligence and privacy on iPhone"
+[3]: https://github.com/scouzi1966/maclocal-api?utm_source=chatgpt.com "scouzi1966/maclocal-api: 'afm' command cli: macOS server ..."
