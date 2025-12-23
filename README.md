@@ -2,6 +2,8 @@
 
 A macOS command-line interface for Apple Intelligence's on-device foundation model.
 
+**Version:** 0.5.0 | [Installation](INSTALL.md) | [Changelog](CHANGELOG.md)
+
 ## Features
 
 ✅ **Implemented**
@@ -41,11 +43,40 @@ A macOS command-line interface for Apple Intelligence's on-device foundation mod
 
 ## Installation
 
-```bash
-# Build from source
-swift build -c release
+### Option 1: Download Pre-built Binary (Easiest)
 
-# The binary will be at .build/release/ai
+Download the latest release from the [Releases page](https://github.com/yourusername/askai/releases):
+
+```bash
+# Quick install
+curl -L -o ai.tar.gz https://github.com/yourusername/askai/releases/latest/download/ai-macos-arm64.tar.gz
+tar -xzf ai.tar.gz
+mkdir -p ~/bin && cp ai ~/bin/
+```
+
+For detailed installation instructions, see **[INSTALL.md](INSTALL.md)**.
+
+### Option 2: Build from Source
+
+```bash
+# Build release binary with build date
+make release
+
+# Install for current user (no sudo required)
+make install-user  # Installs to ~/.local/bin/ai (default)
+
+# Or install to ~/bin
+make install-user USER_BIN=~/bin
+
+# Or install system-wide (requires sudo)
+sudo make install  # Installs to /usr/local/bin/ai
+```
+
+**Uninstall:**
+```bash
+make uninstall-user  # Remove from user bin
+# or
+sudo make uninstall  # Remove from /usr/local/bin
 ```
 
 ## Usage
@@ -53,35 +84,40 @@ swift build -c release
 ### Basic Examples
 
 ```bash
-# Simple prompt
-./build/release/ai --prompt "Write a haiku about coding"
+# Simple prompt (direct argument - easiest way)
+ai "Write a haiku about coding"
+
+# Or with explicit flag
+ai --prompt "Write a haiku about coding"
+# or
+ai -p "Write a haiku about coding"
 
 # Interactive single prompt
-./build/release/ai
+ai
 > Type your prompt here
 > Press Ctrl+D to submit
 
 # Pipe input from file
-cat document.txt | .build/release/ai --stdin
+cat document.txt | ai --stdin
 
 # With system instruction
-.build/release/ai --system "You are a helpful assistant" --prompt "Explain quantum computing"
+ai --system "You are a helpful assistant" "Explain quantum computing"
 ```
 
 ### REPL Mode (Interactive Conversations)
 
 ```bash
 # Start REPL mode
-.build/release/ai --repl
+ai --repl
 
 # REPL with system instruction
-.build/release/ai --repl --system "You are a helpful coding assistant"
+ai --repl --system "You are a helpful coding assistant"
 
 # REPL with session saving
-.build/release/ai --repl --save-session chat.jsonl
+ai --repl --save-session chat.jsonl
 
 # REPL with custom context budget (default 2048 tokens for history)
-.build/release/ai --repl --context-tokens 3000
+ai --repl --context-tokens 3000
 ```
 
 The REPL mode maintains conversation history and automatically manages the 4,096 token context window by truncating older messages when needed.
@@ -90,54 +126,54 @@ The REPL mode maintains conversation history and automatically manages the 4,096
 
 ```bash
 # Text output with streaming (default - tokens appear in real-time)
-.build/release/ai --prompt "Write a story"
+ai "Write a story"
 
 # Disable streaming (buffer complete response)
-.build/release/ai --prompt "Write a story" --no-stream
+ai "Write a story" --no-stream
 
 # JSON output (automatically disables streaming)
-.build/release/ai --prompt "Hello" --format json
+ai "Hello" --format json
 
 # Verbose mode (shows latency)
-.build/release/ai --prompt "Hello" --verbose
+ai "Hello" --verbose
 ```
 
 ### Generation Controls
 
 ```bash
 # Temperature (0.0 = deterministic, 2.0 = creative)
-.build/release/ai --temperature 1.5 --prompt "Write a creative story"
+ai --temperature 1.5 "Write a creative story"
 
 # Greedy sampling (deterministic output)
-.build/release/ai --greedy --prompt "Generate code"
+ai --greedy "Generate code"
 
 # Limit response length
-.build/release/ai --max-tokens 50 --prompt "Explain AI"
+ai --max-tokens 50 "Explain AI"
 ```
 
 ### Structured Output
 
 ```bash
 # Extract contact information
-.build/release/ai --schema contact --format json --prompt "Name: John Doe, Email: john@example.com, Phone: 555-1234"
+ai --schema contact --format json "Name: John Doe, Email: john@example.com, Phone: 555-1234"
 
 # Extract a list of items
-.build/release/ai --schema list --format json --prompt "List the programming languages: Python, JavaScript, Swift"
+ai --schema list --format json "List the programming languages: Python, JavaScript, Swift"
 
 # Extract task information
-.build/release/ai --schema task --format json --prompt "Create a task to update the documentation, high priority, 2 hours"
+ai --schema task --format json "Create a task to update the documentation, high priority, 2 hours"
 
 # Extract multiple tasks
-.build/release/ai --schema task-list --format json --prompt "Plan a birthday party"
+ai --schema task-list --format json "Plan a birthday party"
 
 # Extract key-value pairs
-.build/release/ai --schema key-value --format json --prompt "Parse config: debug=true, port=8080, host=localhost"
+ai --schema key-value --format json "Parse config: debug=true, port=8080, host=localhost"
 
 # Message classification
-.build/release/ai --schema message --format json --prompt "Classify this email: URGENT - Server down, need immediate attention"
+ai --schema message --format json "Classify this email: URGENT - Server down, need immediate attention"
 
 # Code analysis
-.build/release/ai --schema code-analysis --format json --stdin < mycode.swift
+ai --schema code-analysis --format json --stdin < mycode.swift
 ```
 
 Available schemas:
@@ -153,7 +189,10 @@ Available schemas:
 ## Command-Line Options
 
 ```
-USAGE: ai [<options>]
+USAGE: ai [<options>] [<prompt-arg>]
+
+ARGUMENTS:
+  <prompt-arg>                     Prompt text (alternative to --prompt)
 
 OPTIONS:
   -p, --prompt <prompt>            Prompt text
@@ -207,28 +246,28 @@ ai/
 
 ```bash
 # Summarize text
-echo "Long article text..." | .build/release/ai --stdin --system "Summarize this in 3 bullet points"
+echo "Long article text..." | ai --stdin --system "Summarize this in 3 bullet points"
 
 # Code review
-cat myfile.swift | .build/release/ai --stdin --system "Review this Swift code for potential issues"
+cat myfile.swift | ai --stdin --system "Review this Swift code for potential issues"
 
 # Generate content
-.build/release/ai --prompt "Write 5 creative project names for a weather app" --temperature 1.8
+ai --temperature 1.8 "Write 5 creative project names for a weather app"
 
 # Extract information (unstructured)
-.build/release/ai --prompt "Extract email addresses from this text: Contact us at hello@example.com or support@test.org" --format json
+ai --format json "Extract email addresses from this text: Contact us at hello@example.com or support@test.org"
 
 # Extract structured contact information
-.build/release/ai --schema contact --format json --prompt "Parse: John Doe, john@company.com, (555) 123-4567"
+ai --schema contact --format json "Parse: John Doe, john@company.com, (555) 123-4567"
 
 # Extract list of items
-.build/release/ai --schema list --format json --prompt "Find all cities mentioned: I've lived in New York, San Francisco, and Tokyo"
+ai --schema list --format json "Find all cities mentioned: I've lived in New York, San Francisco, and Tokyo"
 
 # Interactive coding session
-.build/release/ai --repl --system "You are an expert Swift developer" --save-session coding-session.jsonl
+ai --repl --system "You are an expert Swift developer" --save-session coding-session.jsonl
 
 # Long conversation with context management
-.build/release/ai --repl --context-tokens 3000 --verbose
+ai --repl --context-tokens 3000 --verbose
 # The verbose flag will show when older messages are truncated
 ```
 
@@ -253,6 +292,29 @@ Typical performance on Apple M4 Pro:
 3. **Content guardrails enforced** - Cannot be disabled (Apple framework requirement)
 4. **Language support** - ~10 languages (English, German, Spanish, French, Italian, Japanese, Korean, Portuguese, Chinese)
 5. **Not a knowledge base** - Best for text tasks (summarization, refinement, creative content), not factual Q&A
+
+## Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history and release notes.
+
+## Release Process
+
+To create a new release:
+
+```bash
+# 1. Update version in Scripts/generate-build-info.sh
+# 2. Update CHANGELOG.md
+# 3. Build and package release
+./Scripts/package-release.sh
+
+# 4. Create and push git tag
+git tag v0.5.0
+git push origin v0.5.0
+
+# 5. Create GitHub release and upload the tarball
+```
+
+See `Scripts/package-release.sh` for the complete release workflow including code signing and notarization.
 
 ## License
 

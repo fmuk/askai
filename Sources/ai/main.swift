@@ -15,10 +15,13 @@ struct AI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "ai",
         abstract: "Command-line interface to Apple Intelligence on-device model",
-        version: "0.1.0"
+        version: "\(BuildInfo.version) (built \(BuildInfo.buildDate))"
     )
 
     // MARK: - Input Options
+    @Argument(help: "Prompt text (alternative to --prompt)")
+    var promptArg: String?
+
     @Option(name: .shortAndLong, help: "Prompt text")
     var prompt: String?
 
@@ -74,6 +77,16 @@ struct AI: AsyncParsableCommand {
 
     // MARK: - Validation
     mutating func validate() throws {
+        // Merge positional argument with --prompt option
+        if promptArg != nil && prompt != nil {
+            throw ValidationError("Cannot specify both positional prompt and --prompt option")
+        }
+
+        // Use positional argument if provided
+        if promptArg != nil {
+            prompt = promptArg
+        }
+
         if prompt != nil && stdin {
             throw ValidationError("Cannot specify both --prompt and --stdin")
         }
@@ -90,8 +103,8 @@ struct AI: AsyncParsableCommand {
             throw ValidationError("JSON format not supported in REPL mode")
         }
 
-        if repl && (prompt != nil || stdin) {
-            throw ValidationError("Cannot use --prompt or --stdin in REPL mode")
+        if repl && (prompt != nil || stdin || promptArg != nil) {
+            throw ValidationError("Cannot use prompt or --stdin in REPL mode")
         }
 
         if loadSession != nil && !repl {

@@ -17,6 +17,7 @@ struct InputReader {
         }
 
         // 3. Interactive
+        fputs("Enter your prompt (press Ctrl+D on a new line to submit):\n", stderr)
         print("> ", terminator: "")
         fflush(stdout)
 

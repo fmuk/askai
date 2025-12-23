@@ -25,14 +25,13 @@ struct ContextManager {
     ) -> (includedHistory: [(user: String, assistant: String)], truncated: Bool) {
 
         // Estimate tokens for system instruction
-        var systemTokens = 0
         if let sys = system {
-            systemTokens = TokenEstimator.estimate(sys)
+            _ = TokenEstimator.estimate(sys)
             // If system instruction exceeds budget, that's a problem but we'll include it anyway
         }
 
         // Estimate tokens for current prompt
-        let promptTokens = TokenEstimator.estimate(currentPrompt)
+        _ = TokenEstimator.estimate(currentPrompt)
 
         // Calculate available budget for history
         let availableForHistory = historyBudget

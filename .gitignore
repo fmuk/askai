@@ -48,3 +48,33 @@ fastlane/test_output
 
 # Session files
 *.jsonl
+
+# Release artifacts
+release/
+*.tar.gz
+*.zip
+*.sha256
+
+# Temporary/scratch files
+.github-release-setup-summary.md
+.automated-release-summary.md
+*.log
+
+# Editor/IDE temporary files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Sensitive files (signing, credentials, release workflow)
+.env
+*.p12
+*.cer
+*.mobileprovision
+credentials.json
+secrets/
+signing-config.sh
+signing-config.sh.template
+Scripts/package-release.sh
+RELEASE.md
