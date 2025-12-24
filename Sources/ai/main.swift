@@ -29,7 +29,7 @@ struct AI: AsyncParsableCommand {
     var stdin: Bool = false
 
     // MARK: - Output Options
-    @Option(help: "Output format (text|json)")
+    @Option(help: "Output format (text|json|ics)")
     var format: String = "text"
 
     @Flag(help: "Disable streaming output (buffer complete response)")
@@ -52,7 +52,7 @@ struct AI: AsyncParsableCommand {
     var greedy: Bool = false
 
     // MARK: - Structured Output Options
-    @Option(help: "Schema type for structured output (contact, task, task-list, code-issue, code-analysis, message, key-value, list)")
+    @Option(help: "Schema type for structured output (contact, task, task-list, code-issue, code-analysis, message, key-value, list, calendar)")
     var schema: String?
 
     // MARK: - Session Options
@@ -95,12 +95,17 @@ struct AI: AsyncParsableCommand {
             throw ValidationError("Temperature must be between 0.0 and 2.0")
         }
 
-        if format != "text" && format != "json" {
-            throw ValidationError("Format must be 'text' or 'json'")
+        if format != "text" && format != "json" && format != "ics" {
+            throw ValidationError("Format must be 'text', 'json', or 'ics'")
         }
 
-        if format == "json" && repl {
-            throw ValidationError("JSON format not supported in REPL mode")
+        // ICS format only works with calendar schema
+        if format == "ics" && schema != "calendar" {
+            throw ValidationError("Format 'ics' only works with --schema calendar")
+        }
+
+        if (format == "json" || format == "ics") && repl {
+            throw ValidationError("JSON and ICS formats not supported in REPL mode")
         }
 
         if repl && (prompt != nil || stdin || promptArg != nil) {
@@ -119,9 +124,22 @@ struct AI: AsyncParsableCommand {
             }
         }
 
-        // Schema requires format to be json or unspecified (will default to json)
-        if schema != nil && format == "text" {
-            throw ValidationError("Structured output (--schema) requires --format json or no format specified")
+        // Schema requires appropriate format
+        if let schemaStr = schema {
+            if schemaStr == "calendar" {
+                // Calendar: default to ICS if format not specified
+                if format == "text" {
+                    format = "ics"  // Auto-default to ICS for calendar
+                }
+            } else {
+                // Other schemas require JSON
+                if format == "ics" {
+                    throw ValidationError("Format 'ics' only works with --schema calendar")
+                }
+                if format == "text" {
+                    format = "json"  // Auto-default to JSON for other schemas
+                }
+            }
         }
     }
 
@@ -130,7 +148,7 @@ struct AI: AsyncParsableCommand {
         let runner = CLIRunner(
             prompt: prompt,
             useStdin: stdin,
-            format: format == "json" ? .json : .text,
+            format: format == "json" ? .json : (format == "ics" ? .ics : .text),
             noStream: noStream,
             quiet: quiet,
             verbose: verbose,
@@ -304,14 +322,19 @@ struct CLIRunner {
         schemaType: SchemaType,
         options: GenerationOptions?
     ) async throws -> String {
-        // Build prompt with schema example
+        // Build prompt focused on extraction with explicit schema
         let enhancedPrompt = """
+        Extract \(schemaType.extractionDescription) from the following text:
+
         \(input)
 
-        You MUST respond with ONLY valid JSON following this exact schema:
-        \(schemaType.exampleJSON)
+        \(schemaType.schemaFields)
 
-        Use these exact field names and types. Do not include any explanatory text.
+        IMPORTANT:
+        - Extract actual information from the text above
+        - For optional fields with no data, omit the field entirely or use JSON null (not the string "null")
+        - Use only the information present in the text
+        - Respond with ONLY valid JSON
         """
 
         switch schemaType {
@@ -338,6 +361,13 @@ struct CLIRunner {
             return response.rawJSON
         case .stringList:
             let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: StringList.self, options: options)
+            return response.rawJSON
+        case .calendarEvent:
+            let response = try await client.respondStructured(to: enhancedPrompt, responseSchema: CalendarEvent.self, options: options)
+            // Convert to ICS format
+            if let event = try? JSONDecoder().decode(CalendarEvent.self, from: response.rawJSON.data(using: .utf8)!) {
+                return event.toICS()
+            }
             return response.rawJSON
         }
     }

@@ -3,6 +3,7 @@ import Foundation
 enum OutputFormat: String {
     case text
     case json
+    case ics
 }
 
 struct OutputRenderer {
@@ -39,7 +40,7 @@ struct OutputRenderer {
 
     func printResponse(_ response: Response, prompt: String, systemInstructions: String?, latencyMs: Int) {
         switch format {
-        case .text:
+        case .text, .ics:
             print(response.content)
 
             if verbose {

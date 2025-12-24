@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-12-24
+
+### Added
+- Calendar event schema (`--schema calendar`) for extracting event information
+- ICS (iCalendar) output format for calendar events
+- `--format ics` option for generating .ics files
+- Auto-detection: calendar schema defaults to ICS format
+- Support for timezone-aware events (TZID field)
+- CalendarEvent struct with toICS() method for proper .ics file generation
+- Explicit schema field guidance to improve extraction accuracy
+
+### Changed
+- Calendar schema outputs .ics format by default (can override with `--format json` for debugging)
+- Updated validation to allow `--format ics` only with calendar schema
+- Improved structured output prompts to focus on extraction rather than example copying
+
+### Fixed
+- Structured output now extracts actual data from input instead of copying example values
+- Calendar events now use correct ICS field names (summary, dtstart, dtend, location, description)
+- Invalid values ("null" strings, type descriptions) are now filtered out from ICS output
+
+### Known Limitations
+- Structured output may vary slightly between runs due to model randomness
+- Use `--greedy` or `--temperature 0.0` for more deterministic results
+- Optional fields may be omitted by the model; review output before using
+
+### Documentation
+- Added calendar schema examples to README
+- Documented .ics file format and usage patterns
+
 ## [0.5.0] - 2025-12-23
 
 ### Added

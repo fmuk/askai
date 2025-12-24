@@ -2,7 +2,7 @@
 
 A macOS command-line interface for Apple Intelligence's on-device foundation model.
 
-**Version:** 0.5.0 | [Installation](INSTALL.md) | [Changelog](CHANGELOG.md)
+**Version:** 0.6.0 | [Installation](INSTALL.md) | [Changelog](CHANGELOG.md)
 
 ## Features
 
@@ -153,6 +153,8 @@ ai --max-tokens 50 "Explain AI"
 
 ### Structured Output
 
+**Tip:** Use `--greedy` or `--temperature 0.0` for more consistent extraction results.
+
 ```bash
 # Extract contact information
 ai --schema contact --format json "Name: John Doe, Email: john@example.com, Phone: 555-1234"
@@ -174,6 +176,18 @@ ai --schema message --format json "Classify this email: URGENT - Server down, ne
 
 # Code analysis
 ai --schema code-analysis --format json --stdin < mycode.swift
+
+# Calendar event extraction (outputs .ics format)
+ai --schema calendar "Team meeting tomorrow at 2pm for 1 hour in Conference Room A. Europe/Berlin timezone"
+
+# Or explicitly specify ICS format
+ai --schema calendar --format ics "Team meeting tomorrow at 2pm"
+
+# Save to .ics file for import
+ai --schema calendar "Project review Dec 25, 2025 at 2pm-3pm in Room 101" > event.ics
+
+# Get JSON instead (for debugging)
+ai --schema calendar --format json "Meeting details here"
 ```
 
 Available schemas:
@@ -185,6 +199,7 @@ Available schemas:
 - `message` - Email/message classification (category, sentiment, priority)
 - `key-value` - Extract key-value pairs
 - `list` - Simple list of strings
+- `calendar` - Extract calendar event and output as .ics file format
 
 ## Command-Line Options
 
@@ -204,7 +219,7 @@ OPTIONS:
   --max-tokens <max-tokens>        Maximum response tokens
   --temperature <temperature>      Temperature (0.0-2.0)
   --greedy                         Use greedy sampling (deterministic)
-  --schema <schema>                Schema type for structured output (contact, task, task-list, code-issue, code-analysis, message, key-value, list)
+  --schema <schema>                Schema type for structured output (contact, task, task-list, code-issue, code-analysis, message, key-value, list, calendar)
   --system <system>                System instruction
   --repl                           Interactive conversation mode
   --save-session <save-session>    Save session transcript to file (JSONL)
@@ -292,6 +307,7 @@ Typical performance on Apple M4 Pro:
 3. **Content guardrails enforced** - Cannot be disabled (Apple framework requirement)
 4. **Language support** - ~10 languages (English, German, Spanish, French, Italian, Japanese, Korean, Portuguese, Chinese)
 5. **Not a knowledge base** - Best for text tasks (summarization, refinement, creative content), not factual Q&A
+6. **Structured output variability** - The 3B on-device model may produce slightly different extractions on each run. Use `--greedy` or `--temperature 0.0` for more consistent results. Review and edit output as needed.
 
 ## Version History
 

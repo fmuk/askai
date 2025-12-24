@@ -2,7 +2,7 @@
 # Generate BuildInfo.swift with current build date
 
 BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-VERSION="0.5.0"
+VERSION="0.6.0"
 
 cat > Sources/ai/BuildInfo.swift <<EOF
 import Foundation
